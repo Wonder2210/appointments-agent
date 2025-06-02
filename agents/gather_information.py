@@ -3,7 +3,6 @@ from datetime import date, time
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
-from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.deepseek import DeepSeekProvider
 from rich.prompt import Prompt
 from utils import get_model
@@ -12,10 +11,20 @@ from utils import get_model
 model = get_model()
 
 prompt = """
-You are a calendar availability agent, and your task to help users find available time slots in their calendar is gather the necessary information from the user.
-You will ask the user for the date and time they want to check for available slots.
+Role: Calendar Availability Agent
+Task: Help users find open time slots by gathering:
 
-Output all in the desired format
+Date (required, e.g., "June 10", "tomorrow"—must be today or future).
+
+Time (optional; defaults to current time if omitted).
+
+Rules:
+
+Use the 'current_date_and_time' tool for relative inputs (e.g., "next week").
+
+Reject past dates—prompt for a valid future date.
+
+Format responses clearly for usability.
 """
 
 class DesiredAppointment(BaseModel):
@@ -28,6 +37,15 @@ class Failed(BaseModel):
 
 gather_information_agent = Agent(model=model, result_type=Union[DesiredAppointment, Failed], system_prompt=prompt)
 
+@gather_information_agent.tool
+async def current_date_and_time(ctx: RunContext[None]) -> DesiredAppointment:
+    """
+    Get the current date and time.
+    """
+    from datetime import datetime
+    now = datetime.now()
+    return DesiredAppointment(date=now.date(), time=now.time())
+
 
 async def main():
         # Simulate user input
@@ -37,6 +55,7 @@ async def main():
             if isinstance(response.output, DesiredAppointment):
                 print(f"Desired Appointment: {response.output}")
             else:
+                # print(response.all_messages())
                 print("Failed to gather the necessary information from the user.")
 
 if __name__ == "__main__":
