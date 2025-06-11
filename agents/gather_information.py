@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.providers.deepseek import DeepSeekProvider
 from rich.prompt import Prompt
-from utils import get_model
+from ..utils import get_model
 
 
 model = get_model()
