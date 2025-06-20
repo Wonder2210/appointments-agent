@@ -1,18 +1,28 @@
 import os
 from dataclasses import dataclass
 
+from typing import Union
+
 from pydantic_ai import Agent, RunContext
 
-@dataclass
-class DesiredAppointment:
-    date: str
-    time: str
+import logfire
 
 from .utils import get_model
 import dotenv
 from utils.google_calendar_manager import GoogleCalendarManager
 
 dotenv.load_dotenv()
+logfire.configure(token='pylf_v1_us_2j9PfwjqVDCZXvwFK0pxY8ktCW3GZch6mFnlsgZnlDgz')
+logfire.instrument_pydantic_ai()
+
+@dataclass
+class DesiredAppointment:
+    date: str
+    time: str
+
+@dataclass
+class SelectedAppointment:
+    id: str
 
 model = get_model()
 # Look for alternatives to show the appointment confirmation
@@ -28,16 +38,17 @@ Present valid slots to the user.
 
 User Options:
 
-Request a different day/time.
+If there are no slots available, request the user for a different day/time.
 
 On Confirmation: Return the chosen slot in the desired output format.
+
+A simple yes can be used to confirm the appointment.
 
 Output: Always adhere to the specified formatting rules.
 """
 
 
-
-calendar_availability_agent = Agent(model=model, system_prompt=prompt)
+calendar_availability_agent = Agent[DesiredAppointment, None](model=model, system_prompt=prompt, output_type=Union[SelectedAppointment, str])
 
 calendar_manager = GoogleCalendarManager(
         service_account_file='./client_secrets.json',
@@ -45,19 +56,9 @@ calendar_manager = GoogleCalendarManager(
         
     )
 
-
+# Handle pass down the date and time from the user to the calendar manager
 @calendar_availability_agent.tool
 async def get_calendar_tool(ctx: RunContext[None], date: str, time: str) -> str:
-    """
-    Get calendar events for a specific date and time.
-    
-    """
-    # Placeholder for actual calendar fetching logic
-    return f"Checking calendar for events on {date} at {time}."
-
-
-@calendar_availability_agent.tool
-async def choose_available_slot_tool(ctx: RunContext[None], date: str, time: str) -> str:
     """
     Suggest the next available time slot if the desired slot is not available.
     
@@ -65,6 +66,6 @@ async def choose_available_slot_tool(ctx: RunContext[None], date: str, time: str
 
     events = calendar_manager.get_events(max_results=5)
 
-    print(events)
+    # logfire.info(f"Found events: {events}")
     # Placeholder for actual logic to find the next available slot
     return events
