@@ -2,13 +2,14 @@ from pydantic_ai import Agent, RunContext
 
 from dataclasses import dataclass
 from typing import Union
-from utils import get_model
+from .utils import get_model
 
-from calendar_availability import DesiredAppointment
+from .calendar_availability import DesiredAppointment
 
 system_prompt= """
 Role: Contact Information Gatherer
 Task: Collect user contact details for appointment scheduling.
+Start with a friendly greeting and ask for the user's contact information, for the meeting.
 Gather the following information:
 1. Full Name (required)
 2. Email Address (required)
@@ -17,7 +18,10 @@ Rules:
 - Ensure all required fields are provided.
 - Validate email format.
 - Phone number is optional but should be collected if available.
-Output: Return a structured response with the collected information.
+Output: Return in the following order the contact information:
+1. Full Name
+2. Email Address
+3. Phone Number (if provided)
 """
 
 model = get_model()
@@ -29,17 +33,16 @@ class ContactInformation:
     email: str
     phone_number: Union[str, None]
 
+def set_event(ctx: RunContext[None], full_name: str, email: str, phone_number: Union[str, None]) -> str:
+    """
+    Set the contact information for the user.
+    """
+    print(full_name, ctx.deps)
+    return ContactInformation(full_name=full_name, email=email, phone_number=phone_number)
+
+
 gather_contact_information_agent = Agent[None, DesiredAppointment](
     model=model,
     system_prompt=system_prompt,
-    output_type=ContactInformation
+    output_type=[set_event, str]
 )
-
-@gather_contact_information_agent.tool
-def send_email_with_appointment_details(ctx: RunContext[ContactInformation]) -> str:
-    """
-    Send an email with the appointment details.
-    """
-    contact_info = ctx.input
-    # Here you would implement the logic to send an email using contact_info
-    return f"Email sent to {contact_info.email} with appointment details."

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from typing import Union
 
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent, RunContext, TextOutput
 
 import logfire
 
@@ -44,11 +44,17 @@ On Confirmation: Return the chosen slot in the desired output format.
 
 A simple yes can be used to confirm the appointment.
 
-Output: Always adhere to the specified formatting rules.
+Output: Return the id of the selected appointment or a message indicating unavailability with the date and time.
 """
 
+def output_function(ctx: RunContext, query: str) -> str:
+    """Output function to handle the response from the agent."""
+    print("here")
 
-calendar_availability_agent = Agent[DesiredAppointment, None](model=model, system_prompt=prompt, output_type=Union[SelectedAppointment, str])
+    return "Loading "
+
+
+calendar_availability_agent = Agent[DesiredAppointment, None](model=model, system_prompt=prompt, output_type=[output_function])
 
 calendar_manager = GoogleCalendarManager(
         service_account_file='./client_secrets.json',

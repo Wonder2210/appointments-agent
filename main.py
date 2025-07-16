@@ -1,94 +1,164 @@
+from typing import List, Dict
+from datetime import datetime
+import streamlit as st
 import asyncio
+import uuid
 
-from agents.calendar_availability import DesiredAppointment, SelectedAppointment, calendar_availability_agent
-from rich.prompt import Prompt
-from pydantic_ai.messages import ModelMessage
-
-from dataclasses import dataclass
+from graph import graph
 
 
-@dataclass
-class Deps:
-    """Dependencies for the calendar availability agent."""
-    desired_date: DesiredAppointment
+# Page configuration
+st.set_page_config(
+    page_title="Travel Planner Assistant",
+    page_icon="✈️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-message_history = []
+# Custom CSS for better styling - minimal now that we're using Streamlit's chat components
+st.markdown("""
+<style>
+    .stChatMessage {
+        margin-bottom: 1rem;
+    }
+    .stChatMessage .content {
+        padding: 0.5rem;
+    }
+    .stChatMessage .timestamp {
+        font-size: 0.8rem;
+        color: #888;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-async def run_agent(prompt: str, messages: list[ModelMessage]):
-    """Run the calendar availability agent with a sample input."""
+@st.cache_resource
+def get_thread_id():
+    return str(uuid.uuid4())
 
+thread_id = get_thread_id()
 
-    result = await calendar_availability_agent.run(
-        prompt,
-        deps=Deps(desired_date=DesiredAppointment(date="2023-06-11", time="11:00 AM")),
-        message_history=messages
-    )
-    return result.output, result.all_messages()
+# Initialize session state for chat history and user context
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-async def run_agent_async(prePrompt: str, messages_list: list[ModelMessage] = None):
-    prompt = Prompt.ask(prePrompt)
-    result, messages = await run_agent(prompt, messages=messages_list)
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = str(uuid.uuid4())
 
-    if isinstance(result, SelectedAppointment):
-        print(f"Desired Appointment: {result}")
-        return result  # Return the result instead of continuing recursion
-    else:
-        # Add await here and return the result
-        return await run_agent_async(result, messages_list=messages)
+if "processing_message" not in st.session_state:
+    st.session_state.processing_message = None
+
+# Function to handle user input
+def handle_user_message(user_input: str):
+    # Add user message to chat history immediately
+    timestamp = datetime.now().strftime("%I:%M %p")
+    st.session_state.chat_history.append({
+        "role": "user",
+        "content": user_input,
+        "timestamp": timestamp
+    })
+    
+    # Set the message for processing in the next rerun
+    st.session_state.processing_message = user_input
+
+# Function to invoke the agent graph to interact with the Travel Planning Agent
+async def invoke_agent_graph(user_input: str):
+    """
+    Run the agent with streaming text for the user_input prompt,
+    while maintaining the entire conversation in `st.session_state.messages`.
+    """
+    initial_state = {
+        "messages": [],
+        "user_input": user_input,
+        "contact_information": {}
+    }
+    
+    async for chunk in graph.astream(initial_state, stream_mode="custom"):
+        yield chunk
 
 async def main():
-    res = await run_agent_async("I would like to check availability for a meeting on June 11 at 11:00 AM.")
-    print(f"Final result: {res}")
-      
-    #   history_messages = []
+    # Sidebar
+    with st.sidebar:
+        st.title("Appointment Scheduler")
+        
+        if st.button("Start New Conversation"):
+            st.session_state.chat_history = []
+            st.session_state.thread_id = str(uuid.uuid4())
+            st.success("New conversation started!")
 
-    #   async with calendar_availability_agent.run_stream( "I would like to check availability for a meeting on June 11 at 11:00 AM.", message_history=history_messages) as result:
-    #     curr_response = ""
-    #     # print(result.new_messages())
-    #     async for message, last in result.stream_structured(debounce_by=0.01):  
+    # Main chat interface
+    st.title("📅 Appointment Scheduler")
+    st.caption("Tell me about your appointment needs and I'll help schedule it!")
 
-    #         data = message
+    # Display chat messages
+    for message in st.session_state.chat_history:
+        if message["role"] == "user":
+            with st.chat_message("user", avatar=f"https://api.dicebear.com/7.x/avataaars/svg?seed={st.session_state.thread_id}"):
+                st.markdown(message["content"])
+                st.caption(message["timestamp"])
+        else:
+            with st.chat_message("assistant", avatar="https://api.dicebear.com/7.x/bottts/svg?seed=travel-agent"):
+                st.markdown(message["content"])
+                st.caption(message["timestamp"])
+
+    # User input
+    user_input = st.chat_input("Tell me about your appointment...")
+    if user_input:
+        handle_user_message(user_input)
+        st.rerun()
+
+    # Process message if needed
+    if st.session_state.processing_message:
+        user_input = st.session_state.processing_message
+        st.session_state.processing_message = None
+        
+        # Process the message asynchronously
+        with st.spinner("Thinking..."):
+            try:
+                # Prepare input for the agent using chat history
+                if len(st.session_state.chat_history) > 1:
+                    # Convert chat history to input list format for the agent
+                    input_list = []
+                    for msg in st.session_state.chat_history:
+                        input_list.append({"role": msg["role"], "content": msg["content"]})
+                else:
+                    # First message
+                    input_list = user_input
+
+                # Display assistant response in chat message container
+                response_content = ""
+                
+                # Create a chat message container using Streamlit's built-in component
+                with st.chat_message("assistant", avatar="https://api.dicebear.com/7.x/bottts/svg?seed=travel-agent"):
+                    message_placeholder = st.empty()
+                    
+                    # Run the async generator to fetch responses
+                    async for chunk in invoke_agent_graph(user_input):
+                        response_content += chunk
+                        # Update only the text content
+                        message_placeholder.markdown(response_content)
+                
+                # Add assistant response to chat history
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "content": response_content,
+                    "timestamp": datetime.now().strftime("%I:%M %p")
+                })
+                
+            except Exception as e:
+                raise Exception(e)
+                error_message = f"Sorry, I encountered an error: {str(e)}"
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "content": error_message,
+                    "timestamp": datetime.now().strftime("%I:%M %p")
+                })
             
+            # Force a rerun to display the AI response
+            # st.rerun()
 
-    #         print (f"Message: {message}")
-
-    # console.log(result.usage())
-
-
-# def prettier_code_blocks():
-#     """Make rich code blocks prettier and easier to copy.
-
-#     From https://github.com/samuelcolvin/aicli/blob/v0.8.0/samuelcolvin_aicli.py#L22
-#     """
-
-#     class SimpleCodeBlock(CodeBlock):
-#         def __rich_console__(
-#             self, console: Console, options: ConsoleOptions
-#         ) -> RenderResult:
-#             code = str(self.text).rstrip()
-#             yield Text(self.lexer_name, style='dim')
-#             yield Syntax(
-#                 code,
-#                 self.lexer_name,
-#                 theme=self.theme,
-#                 background_color='default',
-#                 word_wrap=True,
-#             )
-#             yield Text(f'/{self.lexer_name}', style='dim')
-
-#     Markdown.elements['fence'] = SimpleCodeBlock
-
-
+    # Footer
+    st.divider()
+    st.caption("Powered by Pydantic AI and LangGraph")
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        if str(e) == "This event loop is already running":
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(main())
-        else:
-            raise
-
-# Fix prompt to get the chosen appointment
-# Instruct the agent how to read the fact that if there is no existing events with the name "Available" in the desired date it should be considered as unavailable
+    asyncio.run(main())
