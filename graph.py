@@ -9,12 +9,14 @@ from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, PartDel
 from dataclasses import dataclass
 
 from agents.gather_contact_information import gather_contact_information_agent
+from agents.calendar_availability import calendar_availability_agent
 
 import asyncio
 
 class State(TypedDict):
     messages: Annotated[List[bytes], lambda x, y: x + y]
     contact_information: Dict[str, str]
+    selected_appointment: Dict[str, str]
     user_input: str
 
 async def gather_info_node(state: State,) -> Dict[str, str]:
@@ -48,21 +50,62 @@ async def gather_info_node(state: State,) -> Dict[str, str]:
         "messages": [run.result.new_messages_json()]
     }
 
+async def calendar_availability_node(state: State) -> Dict[str, str]:
+    """
+    Node to check calendar availability and book appointments.
+    """
+    user_input = state["user_input"]
+
+    writer = get_stream_writer()
+
+    data = {}
+
+    message_history: list[ModelMessage] = []
+    for message_row in state['messages']:
+        message_history.extend(ModelMessagesTypeAdapter.validate_json(message_row))
+
+    # For calendar availability, we need to pass the contact information as input
+    # Since the agent expects DesiredAppointment, we'll use the user_input
+    async with calendar_availability_agent.iter(user_input, message_history=message_history) as run:
+        async for node in run:
+            if isinstance(node, End):
+                data = node.data.output
+            elif Agent.is_model_request_node(node):
+                async with node.stream(run.ctx) as request_stream:
+                    async for event in request_stream:
+                        if isinstance(event, PartStartEvent):
+                            writer(event.part.content)
+                        elif isinstance(event, PartDeltaEvent):
+                            writer(event.delta.content_delta)
+
+    return {
+        "selected_appointment": data,
+        "messages": [run.result.new_messages_json()]
+    }
+
 def build_graph():
     """
-    Build the graph with the gather_info_node.
+    Build the graph with the gather_info_node and calendar_availability_node.
     """
 
     graph_builder = StateGraph(State)
     graph_builder.add_node(
         "gather_contact_information",
         gather_info_node,
-
+    )
+    
+    graph_builder.add_node(
+        "calendar_availability",
+        calendar_availability_node,
     )
 
     graph_builder.add_edge(START, "gather_contact_information")
     graph_builder.add_edge(
         "gather_contact_information",
+        "calendar_availability",
+    )
+    graph_builder.add_edge(
+        "calendar_availability",
         END,
     )
 
@@ -74,7 +117,8 @@ async def run_agent(usr_input: str):
     initial_state = {
         "messages": [],
         "user_input": usr_input,
-        "contact_information": {}
+        "contact_information": {},
+        "selected_appointment": {}
     }
 
     async for chunk in graph.astream(initial_state, stream_mode="custom"):
