@@ -58,7 +58,8 @@ def set_event(ctx: RunContext[None], full_name: str, email: str, phone_number: U
     
     # Create calendar event (simplified - would need proper datetime parsing in real usage)
     try:
-        event = calendar_manager.create_event(
+        event = calendar_manager.update_event(
+            event_id=desired_appt.id,
             title=f"Meeting with {full_name}",
             start_time=datetime.strptime(f"{desired_appt.date} {desired_appt.time}", "%Y-%m-%d %H:%M"),
             end_time=datetime.strptime(f"{desired_appt.date} {desired_appt.time}", "%Y-%m-%d %H:%M") + timedelta(hours=1),
