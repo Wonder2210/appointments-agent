@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.providers.deepseek import DeepSeekProvider
 from rich.prompt import Prompt
-from ..utils import get_model
+from agents.utils import get_model
+from datetime import datetime
+
 
 
 model = get_model()
@@ -35,14 +37,13 @@ class DesiredAppointment(BaseModel):
 class Failed(BaseModel):
     """Unable to gather the necessary information from the user."""
 
-gather_information_agent = Agent(model=model, result_type=Union[DesiredAppointment, Failed], system_prompt=prompt)
+gather_information_agent = Agent(model=model, result_type=Union[DesiredAppointment, Failed, str], system_prompt=prompt)
 
 @gather_information_agent.tool
 async def current_date_and_time(ctx: RunContext[None]) -> DesiredAppointment:
     """
     Get the current date and time.
     """
-    from datetime import datetime
     now = datetime.now()
     return DesiredAppointment(date=now.date(), time=now.time())
 

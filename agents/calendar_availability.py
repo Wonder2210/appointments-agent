@@ -47,14 +47,7 @@ A simple yes can be used to confirm the appointment.
 Output: Return the id of the selected appointment or a message indicating unavailability with the date and time.
 """
 
-def output_function(ctx: RunContext, query: str) -> str:
-    """Output function to handle the response from the agent."""
-    print("here")
-
-    return "Loading "
-
-
-calendar_availability_agent = Agent[DesiredAppointment, None](model=model, system_prompt=prompt, output_type=[output_function])
+calendar_availability_agent = Agent[DesiredAppointment, None](model=model, system_prompt=prompt, output_type=[str, SelectedAppointment])
 
 calendar_manager = GoogleCalendarManager(
         service_account_file='./client_secrets.json',

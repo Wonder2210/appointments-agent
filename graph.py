@@ -5,10 +5,10 @@ from pydantic_graph import End
 from typing_extensions import TypedDict
 from typing import Dict, List, Annotated
 from pydantic_ai import Agent
-from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, PartDeltaEvent, PartStartEvent
+from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, PartDeltaEvent, PartStartEvent, ToolCallPartDelta, ToolCallPart
 from dataclasses import dataclass
 
-from agents.gather_contact_information import gather_contact_information_agent
+from agents.gather_information import gather_information_agent
 from agents.calendar_availability import calendar_availability_agent
 
 import asyncio
@@ -27,23 +27,30 @@ async def gather_info_node(state: State,) -> Dict[str, str]:
 
     writer = get_stream_writer()
 
-    data : Dict[str, str] = {}
+    data: Dict[str, str] = {}
 
     message_history: list[ModelMessage] = []
     for message_row in state['messages']:
         message_history.extend(ModelMessagesTypeAdapter.validate_json(message_row))
 
-    async with gather_contact_information_agent.iter(user_input, message_history=message_history) as run:
+    async with gather_information_agent.iter(user_input, message_history=message_history) as run:
         async for node in run:
             if isinstance(node, End):
                 data = node.data.output
             elif Agent.is_model_request_node(node):
                 async with node.stream(run.ctx) as request_stream:
                     async for event in request_stream:
+                        print(event)
                         if isinstance(event, PartStartEvent):
-                            writer(event.part.content)
+                            if isinstance(event.part, ToolCallPart):
+                                continue
+                            if event.part.content:
+                                writer(event.part.content)
                         elif isinstance(event, PartDeltaEvent):
-                            writer(event.delta.content_delta)
+                            if isinstance(event.delta, ToolCallPartDelta):
+                                continue
+                            if event.delta.content_delta:
+                                writer(event.delta.content_delta)
 
     return {
         "contact_information": data,
@@ -54,7 +61,7 @@ async def calendar_availability_node(state: State) -> Dict[str, str]:
     """
     Node to check calendar availability and book appointments.
     """
-    user_input = state["user_input"]
+    user_input = state["contact_information"]
 
     writer = get_stream_writer()
 
@@ -64,8 +71,6 @@ async def calendar_availability_node(state: State) -> Dict[str, str]:
     for message_row in state['messages']:
         message_history.extend(ModelMessagesTypeAdapter.validate_json(message_row))
 
-    # For calendar availability, we need to pass the contact information as input
-    # Since the agent expects DesiredAppointment, we'll use the user_input
     async with calendar_availability_agent.iter(user_input, message_history=message_history) as run:
         async for node in run:
             if isinstance(node, End):
@@ -73,9 +78,12 @@ async def calendar_availability_node(state: State) -> Dict[str, str]:
             elif Agent.is_model_request_node(node):
                 async with node.stream(run.ctx) as request_stream:
                     async for event in request_stream:
+                        print(event)
                         if isinstance(event, PartStartEvent):
+                            print("PartStartEvent:", event)
                             writer(event.part.content)
                         elif isinstance(event, PartDeltaEvent):
+                            print("PartDeltaEvent:", event.delta.content_delta)
                             writer(event.delta.content_delta)
 
     return {
@@ -90,22 +98,22 @@ def build_graph():
 
     graph_builder = StateGraph(State)
     graph_builder.add_node(
-        "gather_contact_information",
+        "gather_information",
         gather_info_node,
     )
     
-    graph_builder.add_node(
-        "calendar_availability",
-        calendar_availability_node,
-    )
+    # graph_builder.add_node(
+    #     "calendar_availability",
+    #     calendar_availability_node,
+    # )
 
-    graph_builder.add_edge(START, "gather_contact_information")
+    graph_builder.add_edge(START, "gather_information")
+    # graph_builder.add_edge(
+    #     "gather_information",
+    #     "calendar_availability",
+    # )
     graph_builder.add_edge(
-        "gather_contact_information",
-        "calendar_availability",
-    )
-    graph_builder.add_edge(
-        "calendar_availability",
+        "gather_information",
         END,
     )
 
