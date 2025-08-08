@@ -19,6 +19,25 @@ class State(TypedDict):
     selected_appointment: Dict[str, str]
     user_input: str
 
+async def handle_event(event, writer):
+    """
+    Handle a single event and write its content if applicable.
+    """
+    if isinstance(event, PartStartEvent) and not isinstance(event.part, ToolCallPart):
+        if event.part.content:
+            writer(event.part.content)
+    elif isinstance(event, PartDeltaEvent) and not isinstance(event.delta, ToolCallPartDelta):
+        if event.delta.content_delta:
+            writer(event.delta.content_delta)
+
+
+async def process_stream(request_stream, writer):
+    """
+    Process the stream of events and delegate handling to `handle_event`.
+    """
+    async for event in request_stream:
+        await handle_event(event, writer)
+
 async def gather_info_node(state: State,) -> Dict[str, str]:
     """
     Node to gather information from the user.
@@ -39,18 +58,7 @@ async def gather_info_node(state: State,) -> Dict[str, str]:
                 data = node.data.output
             elif Agent.is_model_request_node(node):
                 async with node.stream(run.ctx) as request_stream:
-                    async for event in request_stream:
-                        print(event)
-                        if isinstance(event, PartStartEvent):
-                            if isinstance(event.part, ToolCallPart):
-                                continue
-                            if event.part.content:
-                                writer(event.part.content)
-                        elif isinstance(event, PartDeltaEvent):
-                            if isinstance(event.delta, ToolCallPartDelta):
-                                continue
-                            if event.delta.content_delta:
-                                writer(event.delta.content_delta)
+                    await process_stream(request_stream, writer)
 
     return {
         "contact_information": data,
@@ -77,14 +85,7 @@ async def calendar_availability_node(state: State) -> Dict[str, str]:
                 data = node.data.output
             elif Agent.is_model_request_node(node):
                 async with node.stream(run.ctx) as request_stream:
-                    async for event in request_stream:
-                        print(event)
-                        if isinstance(event, PartStartEvent):
-                            print("PartStartEvent:", event)
-                            writer(event.part.content)
-                        elif isinstance(event, PartDeltaEvent):
-                            print("PartDeltaEvent:", event.delta.content_delta)
-                            writer(event.delta.content_delta)
+                    await process_stream(request_stream, writer)
 
     return {
         "selected_appointment": data,
