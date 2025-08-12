@@ -10,7 +10,7 @@ from graph import graph
 # Page configuration
 st.set_page_config(
     page_title="Travel Planner Assistant",
-    page_icon="✈️",
+    page_icon="📆",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -75,8 +75,13 @@ async def invoke_agent_graph(user_input: str):
     async for chunk in graph.astream(initial_state, stream_mode="custom"):
         yield chunk
 
+
 async def main():
     # Sidebar
+
+    if st.session_state.chat_history == []:
+        st.session_state.chat_history = [{"role": "Assistant", "content": "Hello! How can I assist you today?", "timestamp": datetime.now().strftime("%I:%M %p")}]
+
     with st.sidebar:
         st.title("Appointment Scheduler")
         

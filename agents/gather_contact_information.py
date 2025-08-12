@@ -3,9 +3,9 @@ import os
 from dataclasses import dataclass
 from typing import Union
 from datetime import datetime, timedelta
-from .utils import get_model
+from .model import get_model
 from .calendar_availability import DesiredAppointment
-from utils.google_calendar_manager import GoogleCalendarManager
+from agents.google_calendar_manager import GoogleCalendarManager
 import dotenv
 dotenv.load_dotenv()
 

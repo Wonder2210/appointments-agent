@@ -1,28 +1,32 @@
 import os
 from dataclasses import dataclass
 
-from typing import Union
-
 from pydantic_ai import Agent, RunContext, TextOutput
 
 import logfire
 
-from .utils import get_model
+from .model import get_model
 import dotenv
-from utils.google_calendar_manager import GoogleCalendarManager
+from .google_calendar_manager import GoogleCalendarManager
+from datetime import datetime, date, time
 
 dotenv.load_dotenv()
-logfire.configure(token='pylf_v1_us_2j9PfwjqVDCZXvwFK0pxY8ktCW3GZch6mFnlsgZnlDgz')
+logfire.configure(token=os.getenv("LOGFIRE_API_KEY"))
 logfire.instrument_pydantic_ai()
 
 @dataclass
 class DesiredAppointment:
-    date: str
+    min_date: str
+    max_date: str
     time: str
 
 @dataclass
 class SelectedAppointment:
     id: str
+
+@dataclass
+class NoAvailableSlots:
+    message: str
 
 model = get_model()
 # Look for alternatives to show the appointment confirmation
@@ -30,29 +34,30 @@ prompt = """
 Role: Intelligent Calendar Availability Assistant
 Task: Help users find/book available time slots by:
 
-Checking their calendar for the specified date/time (using get_calendar_tool).
+Checking Calendar Availability:
 
-Availability Rule: Only slots with an event explicitly named "Available" are considered open. If none exist, return "Unavailable".
+Use the get_calendar_tool to retrieve events for the specified date/time range.
 
-Present valid slots to the user.
+Availability Rule: Only time slots with an event explicitly named "Available" are considered open. If none exist, return "Unavailable for [date/time]."
 
-User Options:
+User Interaction Flow:
 
-If there are no slots available, request the user for a different day/time.
+If the user provides a specific date/time, check for availability and:
 
-On Confirmation: Return the chosen slot in the desired output format.
+If available, confirm booking (a simple "yes" suffices).
 
-A simple yes can be used to confirm the appointment.
+If unavailable, suggest: "No slots open at [date/time]. Would you like to check another time or list available slots?"
+
+If the user asks to "list available slots" (or similar phrasing), use get_calendar_tool to scan their calendar and return all slots marked "Available" for the specified day/time range.
 
 Output: Return the id of the selected appointment or a message indicating unavailability with the date and time.
 """
 
-calendar_availability_agent = Agent[DesiredAppointment, None](model=model, system_prompt=prompt, output_type=[str, SelectedAppointment])
+calendar_availability_agent = Agent[DesiredAppointment, None](model=model, system_prompt=prompt, output_type=[str, SelectedAppointment, NoAvailableSlots])
 
 calendar_manager = GoogleCalendarManager(
         service_account_file='./client_secrets.json',
         calendar_id=os.getenv("CALENDAR_ID", "primary")
-        
     )
 
 # Handle pass down the date and time from the user to the calendar manager
@@ -68,3 +73,46 @@ async def get_calendar_tool(ctx: RunContext[None], date: str, time: str) -> str:
     # logfire.info(f"Found events: {events}")
     # Placeholder for actual logic to find the next available slot
     return events
+
+@calendar_availability_agent.tool
+async def get_availability_tool(ctx: RunContext[None], date: str, time: str) -> str:
+    """
+    Display all the next available spots
+    
+    """
+    print(f"Checking availability for {date} at {time}")
+
+    events = calendar_manager.get_events(max_results=5)
+
+    # logfire.info(f"Found events: {events}")
+    # Placeholder for actual logic to find the next available slot
+    return events
+
+
+async def run():
+    """
+    Main function to run the calendar availability agent.
+    """
+    user_input = "list all available spots for next week"
+
+    # Run the agent with the user input
+    response = await calendar_availability_agent.run(
+        user_input=user_input,
+        deps=DesiredAppointment(
+            min_date=date(2025, 8, 17),
+            max_date=date(2025, 8, 23),
+            time=time(10, 0)
+        )
+    )
+
+    if response is not None:
+        if isinstance(response.output, SelectedAppointment):
+            print(f"Selected Appointment ID: {response.output.id}")
+        else:
+            print(response.output)
+    else:
+        print("Failed to gather the necessary information from the user.")
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(run())

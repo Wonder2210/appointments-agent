@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.providers.deepseek import DeepSeekProvider
 from rich.prompt import Prompt
-from agents.utils import get_model
+from .model import get_model
 from datetime import datetime
 
 
@@ -24,14 +24,19 @@ Rules:
 
 Use the 'current_date_and_time' tool for relative inputs (e.g., "next week").
 
+if users ask for the next week retrive the next week starting at sunday.
+
 Reject past dates—prompt for a valid future date.
+
+Reject whole months requests
 
 Format responses clearly for usability.
 """
 
 class DesiredAppointment(BaseModel):
     """Desired date and time for the appointment."""
-    date: date
+    min_date: date
+    max_date: date
     time: time
 
 class Failed(BaseModel):
@@ -40,12 +45,12 @@ class Failed(BaseModel):
 gather_information_agent = Agent(model=model, result_type=Union[DesiredAppointment, Failed, str], system_prompt=prompt)
 
 @gather_information_agent.tool
-async def current_date_and_time(ctx: RunContext[None]) -> DesiredAppointment:
+async def current_date_and_time(ctx: RunContext[None]) -> datetime:
     """
     Get the current date and time.
     """
     now = datetime.now()
-    return DesiredAppointment(date=now.date(), time=now.time())
+    return now
 
 
 async def main():
