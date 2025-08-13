@@ -1,13 +1,13 @@
 import os
 from dataclasses import dataclass
-
+import json
 from pydantic_ai import Agent, RunContext, TextOutput
 
 import logfire
 
 from .model import get_model
 import dotenv
-from .google_calendar_manager import GoogleCalendarManager
+from .google_calendar_manager import GoogleCalendarManager, GoogleEvent
 from datetime import datetime, date, time
 
 dotenv.load_dotenv()
@@ -32,25 +32,33 @@ model = get_model()
 # Look for alternatives to show the appointment confirmation
 prompt = """
 Role: Intelligent Calendar Availability Assistant
-Task: Help users find/book available time slots by:
 
-Checking Calendar Availability:
+Objective: Strictly help users find/book available time slots based ONLY on events explicitly named "Available."
 
-Use the get_calendar_tool to retrieve events for the specified date/time range.
+Tools: 
+- Use get_calendar_tool to retrieve events for the specified date/time range.
 
-Availability Rule: Only time slots with an event explicitly named "Available" are considered open. If none exist, return "Unavailable for [date/time]."
+Availability Rule:
+- A time slot is considered open ONLY if there is an event with the exact title "Available" at that date/time.
+- Do NOT infer availability from a lack of events. If no exact match is found, treat it as unavailable.
 
 User Interaction Flow:
+1. If the user provides a specific date/time:
+   - Query get_calendar_tool for events in that time range.
+   - If an event titled exactly "Available" exists at the requested time:
+       → Respond with: "Yes" and return the id of that event.
+   - If not:
+       → Respond: "No slots open at [date/time]. Would you like to check another time or list available slots?"
+       → Return None.
 
-If the user provides a specific date/time, check for availability and:
+2. If the user requests to "list available slots" (or similar):
+   - Use get_calendar_tool to find all events titled exactly "Available" within the given date/time range.
+   - Return a clear list of available slots with their IDs.
 
-If available, confirm booking (a simple "yes" suffices).
-
-If unavailable, suggest: "No slots open at [date/time]. Would you like to check another time or list available slots?"
-
-If the user asks to "list available slots" (or similar phrasing), use get_calendar_tool to scan their calendar and return all slots marked "Available" for the specified day/time range.
-
-Output: Return the id of the selected appointment or a message indicating unavailability with the date and time.
+Output Format:
+- When a booking is confirmed: `{ "id": <appointment_id> }`
+- When no booking is available but alternatives exist: `Searching for alternatives...`
+- When no available slots exist at all: `None`
 """
 
 calendar_availability_agent = Agent[DesiredAppointment, None](model=model, system_prompt=prompt, output_type=[str, SelectedAppointment, NoAvailableSlots])
@@ -77,16 +85,17 @@ async def get_calendar_tool(ctx: RunContext[None], date: str, time: str) -> str:
 @calendar_availability_agent.tool
 async def get_availability_tool(ctx: RunContext[None], date: str, time: str) -> str:
     """
-    Display all the next available spots
+    Display all the next available spots, if exist some
     
     """
     print(f"Checking availability for {date} at {time}")
 
     events = calendar_manager.get_events(max_results=5)
+    print (f"Found events: {events}")
 
     # logfire.info(f"Found events: {events}")
     # Placeholder for actual logic to find the next available slot
-    return events
+    return json.dumps(events, indent=2)
 
 
 async def run():

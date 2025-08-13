@@ -1,7 +1,9 @@
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.config import get_stream_writer
-from langgraph.types import Command, interrupt
+from langgraph.types import interrupt
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
 from pydantic_graph import End
 from typing_extensions import TypedDict
 from typing import Dict, List, Annotated
@@ -86,6 +88,8 @@ async def calendar_availability_node(state: State) -> Dict[str, str]:
     for message_row in state['messages']:
         message_history.extend(ModelMessagesTypeAdapter.validate_json(message_row))
 
+    print(len(message_history))
+
     async with calendar_availability_agent.iter(user_prompt=user_input,deps=user_requirement, message_history=message_history) as run:
         async for node in run:
             if isinstance(node, End):
@@ -139,7 +143,7 @@ def no_time_selected_router(state: State) -> str:
 
     if not isinstance(desired_appt, DesiredAppointment):
         return "wait_message"
-    else:
+    elif isinstance(desired_appt, DesiredAppointment):
         return "calendar_availability"
 
 def non_selected_appt_router (state: State) -> str:
@@ -147,14 +151,20 @@ def non_selected_appt_router (state: State) -> str:
     Route the state to the appropriate node based on the current step.
     """
     desired_appt = state.get("selected_appointment", {})
+    print(f"Routing based on selected appointment: {desired_appt}")
 
-    if desired_appt is None:
-        return "wait_message"
+    if desired_appt is {}:
+        return "gather_information"
+    elif isinstance(desired_appt, str):
+        print("No appointment selected, waiting for user input.")
+        return "wait_calendar_availability"
+    elif isinstance(desired_appt, DesiredAppointment):
+        return "gather_contact_information"
     else:
-        return "calendar_availability"
-    
+        return "wait_calendar_availability"
+
 def get_next_user_message(state: State):
-    value = interrupt("Please provide your next message.")
+    value = interrupt("")
 
     # Set the user's latest message for the LLM to continue the conversation
     return {
@@ -184,18 +194,24 @@ def build_graph():
         gather_contact_information_node,
     )
 
+    graph_builder.add_node("wait_calendar_availability", get_next_user_message)
+
     graph_builder.add_edge(START, "gather_information")
 
     graph_builder.add_conditional_edges("gather_information", no_time_selected_router, ["wait_message", "calendar_availability"])
-
     graph_builder.add_edge("wait_message", "gather_information")
+
+    graph_builder.add_conditional_edges("calendar_availability", non_selected_appt_router, ["wait_calendar_availability", "gather_contact_information", "gather_information"])
+
+    graph_builder.add_edge("wait_calendar_availability", "calendar_availability")
     graph_builder.add_edge("calendar_availability", "gather_contact_information")
     graph_builder.add_edge(
         "gather_contact_information",
         END,
     )
+    memory = MemorySaver()
 
-    return graph_builder.compile()
+    return graph_builder.compile(checkpointer=memory)
 
 graph = build_graph()
 
@@ -207,6 +223,7 @@ async def run_agent(usr_input: str):
         "contact_information": {},
         "selected_appointment": {}
     }
+
 
     async for chunk in graph.astream(initial_state, stream_mode="custom"):
         yield chunk

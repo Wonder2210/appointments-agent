@@ -1,10 +1,23 @@
 from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import os
 import dotenv
 dotenv.load_dotenv()
+
+@dataclass
+class GoogleEvent:
+    id: str
+    title: str
+    start: str
+    end: str
+    link: str
+    description: str = ""
+    location: str = ""
+    creator: str = ""
+    status: str = ""
 
 class GoogleCalendarManager:
     def __init__(self, service_account_file, calendar_id=None):
@@ -35,8 +48,8 @@ class GoogleCalendarManager:
             
         except Exception as e:
             raise Exception(f"Authentication failed: {str(e)}")
-    
-    def get_events(self, time_min=None, time_max=None, max_results=10):
+
+    def get_events(self, time_min=None, time_max=None, max_results=10) -> list[GoogleEvent]:
         """
         Get events from calendar
         
