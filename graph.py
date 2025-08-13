@@ -88,7 +88,7 @@ async def calendar_availability_node(state: State) -> Dict[str, str]:
     for message_row in state['messages']:
         message_history.extend(ModelMessagesTypeAdapter.validate_json(message_row))
 
-    print(len(message_history))
+    print("Checking calendar availability with user requirements:", user_requirement)
 
     async with calendar_availability_agent.iter(user_prompt=user_input,deps=user_requirement, message_history=message_history) as run:
         async for node in run:
@@ -112,6 +112,7 @@ async def gather_contact_information_node(state: State) -> Dict[str, str]:
     Node to gather contact information from the user.
     """
     contact_info = state["contact_information"]
+    print(f"Gathering contact information: {contact_info}")
 
 
     writer = get_stream_writer()
@@ -150,18 +151,18 @@ def non_selected_appt_router (state: State) -> str:
     """
     Route the state to the appropriate node based on the current step.
     """
-    desired_appt = state.get("selected_appointment", {})
+    desired_appt = state.get("selected_appointment", None)
     print(f"Routing based on selected appointment: {desired_appt}")
 
-    if desired_appt is {}:
-        return "gather_information"
+    if not desired_appt:
+        return "wait_message"
     elif isinstance(desired_appt, str):
         print("No appointment selected, waiting for user input.")
         return "wait_calendar_availability"
     elif isinstance(desired_appt, DesiredAppointment):
+        print("Appointment selected, gathering contact information.")
         return "gather_contact_information"
-    else:
-        return "wait_calendar_availability"
+    return "wait_calendar_availability"
 
 def get_next_user_message(state: State):
     value = interrupt("")
@@ -201,7 +202,7 @@ def build_graph():
     graph_builder.add_conditional_edges("gather_information", no_time_selected_router, ["wait_message", "calendar_availability"])
     graph_builder.add_edge("wait_message", "gather_information")
 
-    graph_builder.add_conditional_edges("calendar_availability", non_selected_appt_router, ["wait_calendar_availability", "gather_contact_information", "gather_information"])
+    graph_builder.add_conditional_edges("calendar_availability", non_selected_appt_router, ["wait_calendar_availability", "wait_message", "gather_contact_information", "gather_information"])
 
     graph_builder.add_edge("wait_calendar_availability", "calendar_availability")
     graph_builder.add_edge("calendar_availability", "gather_contact_information")

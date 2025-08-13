@@ -80,7 +80,7 @@ async def get_calendar_tool(ctx: RunContext[None], date: str, time: str) -> str:
 
     # logfire.info(f"Found events: {events}")
     # Placeholder for actual logic to find the next available slot
-    return events
+    return json.dumps(events, indent=2)
 
 @calendar_availability_agent.tool
 async def get_availability_tool(ctx: RunContext[None], date: str, time: str) -> str:
