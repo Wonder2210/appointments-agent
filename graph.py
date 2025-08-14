@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.config import get_stream_writer
-from langgraph.types import interrupt
+from langgraph.types import interrupt, Command
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 from pydantic_graph import End
@@ -11,7 +11,7 @@ from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, PartDeltaEvent, PartStartEvent, ToolCallPartDelta, ToolCallPart
 
 from agents.gather_information import gather_information_agent, DesiredAppointment
-from agents.calendar_availability import calendar_availability_agent
+from agents.calendar_availability import calendar_availability_agent, SelectedAppointment, NoAvailableSlots
 from agents.gather_contact_information import gather_contact_information_agent
 
 import asyncio
@@ -88,21 +88,15 @@ async def calendar_availability_node(state: State) -> Dict[str, str]:
     for message_row in state['messages']:
         message_history.extend(ModelMessagesTypeAdapter.validate_json(message_row))
 
-    print("Checking calendar availability with user requirements:", user_requirement)
-
     async with calendar_availability_agent.iter(user_prompt=user_input,deps=user_requirement, message_history=message_history) as run:
         async for node in run:
             if isinstance(node, End):
-                if not isinstance(node.data.output, DesiredAppointment):
-                    continue
-                else:
                     data = node.data.output
             elif Agent.is_model_request_node(node):
                 async with node.stream(run.ctx) as request_stream:
                     await process_stream(request_stream, writer)
 
-    if data:
-        return {
+    return {
             "selected_appointment": data,
             "messages": [run.result.new_messages_json()]
         }
@@ -111,8 +105,8 @@ async def gather_contact_information_node(state: State) -> Dict[str, str]:
     """
     Node to gather contact information from the user.
     """
-    contact_info = state["contact_information"]
-    print(f"Gathering contact information: {contact_info}")
+    selected_appointment = state["selected_appointment"]
+    user_input = state["user_input"]
 
 
     writer = get_stream_writer()
@@ -123,7 +117,7 @@ async def gather_contact_information_node(state: State) -> Dict[str, str]:
     for message_row in state['messages']:
         message_history.extend(ModelMessagesTypeAdapter.validate_json(message_row))
 
-    async with gather_contact_information_agent.iter(contact_info, message_history=message_history) as run:
+    async with gather_contact_information_agent.iter(user_input, deps=selected_appointment, message_history=message_history) as run:
         async for node in run:
             if isinstance(node, End):
                 data = node.data.output
@@ -140,7 +134,7 @@ def no_time_selected_router(state: State) -> str:
     """
     Route the state to the appropriate node based on whether a time was selected.
     """
-    desired_appt = state.get("user_requirements", {})
+    desired_appt = state.get("user_requirements")
 
     if not isinstance(desired_appt, DesiredAppointment):
         return "wait_message"
@@ -155,11 +149,12 @@ def non_selected_appt_router (state: State) -> str:
     print(f"Routing based on selected appointment: {desired_appt}")
 
     if not desired_appt:
+        print("No desired appointment found.")
         return "wait_message"
-    elif isinstance(desired_appt, str):
+    elif isinstance(desired_appt, NoAvailableSlots):
         print("No appointment selected, waiting for user input.")
         return "wait_calendar_availability"
-    elif isinstance(desired_appt, DesiredAppointment):
+    elif isinstance(desired_appt, SelectedAppointment):
         print("Appointment selected, gathering contact information.")
         return "gather_contact_information"
     return "wait_calendar_availability"
@@ -202,10 +197,9 @@ def build_graph():
     graph_builder.add_conditional_edges("gather_information", no_time_selected_router, ["wait_message", "calendar_availability"])
     graph_builder.add_edge("wait_message", "gather_information")
 
-    graph_builder.add_conditional_edges("calendar_availability", non_selected_appt_router, ["wait_calendar_availability", "wait_message", "gather_contact_information", "gather_information"])
-
     graph_builder.add_edge("wait_calendar_availability", "calendar_availability")
-    graph_builder.add_edge("calendar_availability", "gather_contact_information")
+    graph_builder.add_conditional_edges("calendar_availability", non_selected_appt_router, ["wait_calendar_availability", "wait_message", "gather_contact_information", ])
+
     graph_builder.add_edge(
         "gather_contact_information",
         END,

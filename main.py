@@ -67,17 +67,15 @@ async def invoke_agent_graph(user_input: str):
     Run the agent with streaming text for the user_input prompt,
     while maintaining the entire conversation in `st.session_state.messages`.
     """
-    print(len(st.session_state.chat_history))
     initial_state = {
           "messages": [],
           "user_input": user_input,
           "contact_information": {}
       }
     config = {"configurable": {"thread_id": "1"}}
-    print(graph.get_state(config=config))
     if len(st.session_state.chat_history) == 2:
 
-     async for chunk in graph.astream(initial_state, stream_mode="custom", config=config):
+     async for chunk in graph.astream(initial_state, stream_mode="custom", config=config, debug=True):
           yield chunk
     else:
         async for chunk in graph.astream(Command(resume=user_input), stream_mode="custom", config=config):

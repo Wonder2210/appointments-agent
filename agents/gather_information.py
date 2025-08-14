@@ -14,7 +14,7 @@ model = get_model()
 
 prompt = """
 Role: Calendar Availability Agent
-Task: Help users find open time slots by gathering:
+Task: Help users look for open time slots by gathering:
 
 Date (required, e.g., "June 10", "tomorrow"—must be today or future).
 
