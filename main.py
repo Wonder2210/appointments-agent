@@ -75,7 +75,7 @@ async def invoke_agent_graph(user_input: str):
     config = {"configurable": {"thread_id": "1"}}
     if len(st.session_state.chat_history) == 2:
 
-     async for chunk in graph.astream(initial_state, stream_mode="custom", config=config, debug=True):
+     async for chunk in graph.astream(initial_state, stream_mode="custom", config=config):
           yield chunk
     else:
         async for chunk in graph.astream(Command(resume=user_input), stream_mode="custom", config=config):
