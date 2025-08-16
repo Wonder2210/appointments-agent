@@ -55,13 +55,10 @@ User Interaction Flow:
    - Use get_calendar_tool to find all events titled exactly "Available" within the given date/time range.
    - Return a clear list of available slots with their IDs.
 
-Output Format:
-- When a booking is confirmed: `{ "id": <appointment_id> }`
-- When no booking is available but alternatives exist: `Searching for alternatives...`
-- When no available slots exist at all: `None`
+3. If the appointment is found proceed and return the appointment details in the required format output.
 """
 
-calendar_availability_agent = Agent[DesiredAppointment, None](model=model, system_prompt=prompt, output_type=[str, SelectedAppointment, NoAvailableSlots])
+calendar_availability_agent = Agent[DesiredAppointment, None](model=model, system_prompt=prompt, output_type=[SelectedAppointment])
 
 calendar_manager = GoogleCalendarManager(
         service_account_file='./client_secrets.json',

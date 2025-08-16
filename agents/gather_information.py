@@ -30,7 +30,11 @@ Reject past dates—prompt for a valid future date.
 
 Reject whole months requests
 
+You will search for appointments in that date no schedule them
+
 Format responses clearly for usability.
+
+Return the required data once identified the desired date and time.
 """
 
 class DesiredAppointment(BaseModel):
