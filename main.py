@@ -10,7 +10,7 @@ from graph import graph
 
 # Page configuration
 st.set_page_config(
-    page_title="Travel Planner Assistant",
+    page_title="Appointment Scheduler",
     page_icon="📆",
     layout="wide",
     initial_sidebar_state="expanded"
