@@ -51,11 +51,7 @@ async def gather_info_node(state: State,) -> Dict[str, str]:
     for message_row in state['messages']:
         message_history.extend(ModelMessagesTypeAdapter.validate_json(message_row))
 
-    count=0
-
     async with gather_information_agent.iter(user_input, message_history=message_history) as run:
-        count+=1
-        print(f"Running gather_info_node iteration {count}")
         async for node in run:
             if isinstance(node, End):
                 data = node.data.output
@@ -114,7 +110,6 @@ async def gather_contact_information_node(state: State) -> Dict[str, str]:
     )
 
     writer(run.output)
-    print(run.output, "here")
 
     data = True if isinstance(run.output, SelectedAppointment) else False
 
@@ -145,8 +140,6 @@ def verify_user_date_node(state: State):
     """
     user_requirements = state["user_requirements"]
 
-    print(f"Verifying user date: {user_requirements}")
-
     if isinstance(user_requirements, DesiredAppointment):
         return "calendar_availability"
     return "wait_message"
@@ -156,8 +149,6 @@ def non_selected_appt_router (state: State) -> str:
     Route the state to the appropriate node based on the current step.
     """
     desired_appt = state.get("selected_appointment", None)
-
-    print(f"Routing based on selected appointment: {desired_appt}")
 
     if isinstance(desired_appt, SelectedAppointment):
         return "gather_contact_information"
@@ -175,7 +166,6 @@ def ask_user_for_another_time(state: State) -> Command[Literal["wait_message"]]:
     """
     Ask the user for another time if the selected time is not available.
     """
-    print("Asking user for another time.")
     return Command(goto="wait_message")
 
 def user_data_router(state: State) -> str:

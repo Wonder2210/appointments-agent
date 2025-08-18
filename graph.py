@@ -55,9 +55,9 @@ def build_graph():
 
     graph_builder.add_edge("wait_message", "gather_information")
 
-    graph_builder.add_conditional_edges("gather_information", verify_user_date_node)
-    graph_builder.add_conditional_edges("calendar_availability", non_selected_appt_router)
-    graph_builder.add_conditional_edges("gather_contact_information", user_data_router)
+    graph_builder.add_conditional_edges("gather_information", verify_user_date_node,["calendar_availability", "wait_message"])
+    graph_builder.add_conditional_edges("calendar_availability", non_selected_appt_router, ["gather_contact_information", "wait_for_another_time"])
+    graph_builder.add_conditional_edges("gather_contact_information", user_data_router, ["set_meeting_details", "wait_for_user_details"])
     graph_builder.add_edge("wait_for_user_details", "gather_contact_information")
 
     graph_builder.add_edge("gather_contact_information", "set_meeting_details")
