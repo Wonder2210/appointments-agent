@@ -56,9 +56,13 @@ User Interaction Flow:
    - Return a clear list of available slots with their IDs.
 
 3. If the appointment is found proceed and return the appointment details in the required format output.
+
+Output
+Return the ID of the selected appointment. in the required format
+
 """
 
-calendar_availability_agent = Agent[DesiredAppointment, None](model=model, system_prompt=prompt, output_type=[SelectedAppointment])
+calendar_availability_agent = Agent[DesiredAppointment, SelectedAppointment](model=model, system_prompt=prompt, output_type=SelectedAppointment)
 
 calendar_manager = GoogleCalendarManager(
         service_account_file='./client_secrets.json',

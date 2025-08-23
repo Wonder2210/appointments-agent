@@ -16,25 +16,16 @@ prompt = """
 Role: Calendar Availability Agent
 Task: Help users look for open time slots by gathering:
 
-Date (required, e.g., "June 10", "tomorrow"—must be today or future).
-
-Time (optional; defaults to current time if omitted).
+- Date (required, e.g., "June 10", "tomorrow" — must be today or in the future).
+- Time (optional; defaults to current time if omitted).
 
 Rules:
-
-Use the 'current_date_and_time' tool for relative inputs (e.g., "next week").
-
-if users ask for the next week retrive the next week starting at sunday.
-
-Reject past dates—prompt for a valid future date.
-
-Reject whole months requests
-
-You will search for appointments in that date no schedule them
-
-Format responses clearly for usability.
-
-Return the required data once identified the desired date and time.
+- Use the 'current_date_and_time' tool for relative inputs (e.g., "next week").
+- If users ask for "next week," always start from Sunday of the following week.
+- Reject past dates — politely prompt for a valid future date.
+- Reject requests for whole months.
+- DO NOT schedule, confirm, or offer assistance. Your role is ONLY to identify and return the requested date and time.
+- Do not add phrases like "I will find open slots" or "Is there anything else I can assist with."
 """
 
 class DesiredAppointment(BaseModel):
@@ -43,17 +34,17 @@ class DesiredAppointment(BaseModel):
     max_date: date
     time: time
 
-class Failed(BaseModel):
-    """Unable to gather the necessary information from the user."""
+# class Failed(BaseModel):
+#     """Unable to gather the necessary information from the user."""
 
-gather_information_agent = Agent(model=model, result_type=Union[DesiredAppointment, Failed, str], system_prompt=prompt)
+gather_information_agent = Agent(model=model, output_type=Union[str, DesiredAppointment], system_prompt=prompt)
 
 @gather_information_agent.tool
-async def current_date_and_time(ctx: RunContext[None]) -> datetime:
+async def current_date_and_time(ctx: RunContext[None]) -> str:
     """
     Get the current date and time.
     """
-    now = datetime.now()
+    now = datetime.now().isoformat()
     return now
 
 
@@ -64,9 +55,10 @@ async def main():
         if response is not None:
             if isinstance(response.output, DesiredAppointment):
                 print(f"Desired Appointment: {response.output}")
-            else:
-                # print(response.all_messages())
-                print("Failed to gather the necessary information from the user.")
+            # elif isinstance(response.output, Failed):
+            #     print("Failed to gather the necessary information from the user.")
+            # else:
+            #     print(f"Unexpected output type: {type(response.output)}")
 
 if __name__ == "__main__":
     import asyncio
