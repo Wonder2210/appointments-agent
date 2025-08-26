@@ -26,13 +26,14 @@ Rules:
 - Reject requests for whole months.
 - DO NOT schedule, confirm, or offer assistance. Your role is ONLY to identify and return the requested date and time.
 - Do not add phrases like "I will find open slots" or "Is there anything else I can assist with."
+- Just let the user know that you will find if the requested time is available once the date and time is correct
 """
 
 class DesiredAppointment(BaseModel):
     """Desired date and time for the appointment."""
-    min_date: date
-    max_date: date
-    time: time
+    min_date: str
+    max_date: str
+    time: str
 
 # class Failed(BaseModel):
 #     """Unable to gather the necessary information from the user."""
