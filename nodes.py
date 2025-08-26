@@ -5,7 +5,6 @@ from pydantic_graph import End
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, PartDeltaEvent, PartStartEvent, ToolCallPartDelta, ToolCallPart
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt, Command
-from langgraph.graph import END
 from agents.gather_information import gather_information_agent, DesiredAppointment
 from agents.calendar_availability import calendar_availability_agent, SelectedAppointment
 from agents.gather_contact_information import gather_contact_information_agent
@@ -17,6 +16,7 @@ class State(TypedDict):
     selected_appointment: Dict[str, str]
     user_input: str
     user_requirements: DesiredAppointment
+    meeting_details: MeetingDetails
 
 async def handle_event(event, writer):
     """
@@ -109,9 +109,11 @@ async def gather_contact_information_node(state: State) -> Dict[str, str]:
         message_history=message_history
     )
 
-    writer(run.output)
+    if not isinstance(run.output, MeetingDetails):
+        print(run.output)
+        writer(run.output)
 
-    data = True if isinstance(run.output, SelectedAppointment) else False
+    data = run.output if isinstance(run.output, MeetingDetails) else False
 
     return {
         "meeting_details": data,
@@ -126,7 +128,12 @@ async def set_meeting_details_node(state: State) -> Dict[str, str]:
 
     writer = get_stream_writer()
 
-    result = await set_meeting_details_agent.run(meeting_details=meeting_details)
+    
+    message_history: list[ModelMessage] = []
+    for message_row in state['messages']:
+        message_history.extend(ModelMessagesTypeAdapter.validate_json(message_row))
+
+    result = await set_meeting_details_agent.run(deps=meeting_details, message_history=message_history)
 
     writer(result.output)
 
@@ -172,9 +179,9 @@ def user_data_router(state: State) -> str:
     """
     Route the state to the appropriate node based on whether user data is available.
     """
-    user_data = state.get("contact_information", None)
+    user_data = state.get("meeting_details", None)
 
-    if user_data:
+    if isinstance(user_data, MeetingDetails):
         return "set_meeting_details"
     return "wait_for_user_details" 
 
