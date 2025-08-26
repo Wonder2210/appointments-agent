@@ -28,8 +28,6 @@ def build_graph():
         gather_info_node,
     )
 
-    graph_builder.add_node("verify_user_date", verify_user_date_node)
-
     graph_builder.add_node(
         "calendar_availability",
         calendar_availability_node,
