@@ -11,7 +11,7 @@ dotenv.load_dotenv()
 
 system_prompt= """
 Role: Contact Information Gatherer
-Task: The user has already gave the details for their appointment. Collect user contact details for appointment scheduling, then confirm the booking.
+Task: Collect user contact details to finish the appointment scheduling
 
 Gather the following:
 1. Full Name (required)
@@ -24,23 +24,25 @@ Behavior:
 - Do not ask for timezone.
 - Ask the user for the data missing.
 
-Tool usage:
-- When (and only when) you have both Full Name and a valid Email, call the tool: set_event.
-- Call set_event exactly once.
-- After the tool returns:
-  - If successful, confirm the booking and include any link returned by the tool.
-  - If it returns an error message, briefly apologize and ask the user to correct the missing/invalid info.
-
 Output:
 - Return the required data
 """
 
 model = get_model()
 
-gather_contact_information_agent = Agent[None, SelectedAppointment](
+async def format_user_info(ctx: RunContext, info) -> MeetingDetails:
+    return MeetingDetails(
+        full_name=info.get("name", ""),
+        email=info.get("email", ""),
+        phone_number=info.get("phone", None),
+        selected_appointment=ctx.deps
+    )
+
+gather_contact_information_agent = Agent(
     model=model,
     system_prompt=system_prompt,
-    output_type=[str,MeetingDetails]
+    deps_type=SelectedAppointment,
+    output_type=Union[str, MeetingDetails]
 )
 
 @dataclass
@@ -52,12 +54,12 @@ class ContactInformation:
 
 
 async def main():
-    user_input = "my name is wonder and my email is criptowder@gmail.com\n\nmy phone number is +573224845533"
+    user_input = "my name is wonder and my email is test@gmail.com\n\nmy phone number is +123345678"
     selected_appointment = SelectedAppointment(id='3pvnq212mnaom093nn9rpoe0oc')
     message_history = []
 
     run = await gather_contact_information_agent.run(
-        user_prompt="",
+        user_prompt=user_input,
         deps=selected_appointment,
         message_history=message_history
     )
