@@ -46,21 +46,17 @@ def build_graph():
         "wait_for_user_details",
         get_next_user_message,
     )
-
     graph_builder.add_node("set_meeting_details", set_meeting_details_node)
 
-    graph_builder.add_node("wait_for_another_time", ask_user_for_another_time)
-
     graph_builder.add_edge(START, "gather_information")
-
     graph_builder.add_edge("wait_message", "gather_information")
 
     graph_builder.add_conditional_edges("gather_information", verify_user_date_node,["calendar_availability", "wait_message"])
+
     graph_builder.add_conditional_edges("calendar_availability", non_selected_appt_router, ["gather_contact_information", "wait_for_another_time"])
+    graph_builder.add_node("wait_for_another_time", ask_user_for_another_time)
     graph_builder.add_conditional_edges("gather_contact_information", user_data_router, ["set_meeting_details", "wait_for_user_details"])
     graph_builder.add_edge("wait_for_user_details", "gather_contact_information")
-
-    graph_builder.add_edge("gather_contact_information", "set_meeting_details")
 
     graph_builder.add_edge("set_meeting_details", END)
 
