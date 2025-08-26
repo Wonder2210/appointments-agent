@@ -9,7 +9,9 @@ A Python application to help manage and schedule appointments/meetings.
 3. Run the application: `streamlit main.py`
 
 ## Features
+- Collect user time needs to help find available spots in the calendar
+- Automatically add user info to the desired spot
 
-- Schedule and manage appointments
-- Google Calendar integration
-- Automated meeting coordination
+## Graph
+
+
