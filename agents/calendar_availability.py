@@ -37,9 +37,10 @@ Objective: Strictly help users find/book available time slots based ONLY on even
 
 Tools: 
 - Use get_calendar_tool to retrieve events for the specified date/time range.
+- The desired date it is available on the context
 
 Availability Rule:
-- A time slot is considered open ONLY if there is an event with the exact title "Available" at that date/time.
+- A time slot is considered open ONLY if there is an event with the exact title "Available" at that start and end date/time.
 - Do NOT infer availability from a lack of events. If no exact match is found, treat it as unavailable.
 
 User Interaction Flow:
@@ -51,11 +52,7 @@ User Interaction Flow:
        → Respond: "No slots open at [date/time]. Would you like to check another time or list available slots?"
        → Return None.
 
-2. If the user requests to "list available slots" (or similar):
-   - Use get_calendar_tool to find all events titled exactly "Available" within the given date/time range.
-   - Return a clear list of available slots with their IDs.
-
-3. If the appointment is found proceed and return the appointment details in the required format output.
+2. If the appointment is found proceed and return the appointment details in the required format output.
 
 Output
 Return the ID of the selected appointment. in the required format
@@ -109,9 +106,7 @@ async def run():
     response = await calendar_availability_agent.run(
         user_input=user_input,
         deps=DesiredAppointment(
-            min_date=date(2025, 8, 17),
-            max_date=date(2025, 8, 23),
-            time=time(10, 0)
+            min_date="2025-08-28", max_date="2025-08-28", time="10:00"
         )
     )
 
