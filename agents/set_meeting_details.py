@@ -21,9 +21,10 @@ Task: Set meeting details for the selected appointment calling the set_event too
 
 """
 
-set_meeting_details_agent = Agent[SelectedAppointment](
+set_meeting_details_agent = Agent[MeetingDetails, str](
     model=model,
     system_prompt=prompt,
+    deps_type=MeetingDetails,
     output_type=str
 )
 
@@ -33,13 +34,10 @@ def set_event(ctx: RunContext[MeetingDetails]) -> str:
     Create/update the calendar event for the selected appointment with the provided contact info.
     Returns a short confirmation message with a link when available, or an error message if something fails.
     """
-    # Get appointment time from context
-    selected_appt = ctx.deps
-    full_name = ctx.input.full_name
-    email = ctx.input.email
-    phone_number = ctx.input.phone_number
-    if not isinstance(selected_appt, MeetingDetails) or not full_name or not email:
-        return "Error: Missing appointment time information"
+    # Get meeting details from context
+    meeting_details = ctx.deps
+    if not isinstance(meeting_details, MeetingDetails) or not meeting_details.full_name or not meeting_details.email:
+        return "Error: Missing required meeting information"
     
     # Initialize calendar manager
     calendar_manager = GoogleCalendarManager(
@@ -48,15 +46,15 @@ def set_event(ctx: RunContext[MeetingDetails]) -> str:
     )
     
     # Create event description with contact info
-    description = f"Meeting with {full_name}\nEmail: {email}"
-    if phone_number:
-        description += f"\nPhone: {phone_number}"
+    description = f"Meeting with {meeting_details.full_name}\nEmail: {meeting_details.email}"
+    if meeting_details.phone_number:
+        description += f"\nPhone: {meeting_details.phone_number}"
     
     # Create calendar event (simplified - would need proper datetime parsing in real usage)
     try:
         event = calendar_manager.update_event(
-            event_id=selected_appt.id,
-            title=f"Meeting with {full_name}",
+            event_id=meeting_details.selected_appointment.id,
+            title=f"Meeting with {meeting_details.full_name}",
             description=description,
             location="Online"
         )
@@ -67,4 +65,3 @@ def set_event(ctx: RunContext[MeetingDetails]) -> str:
         return "Event created successfully."
     except Exception as e:
         return f"Failed to create event: {str(e)}"
-
