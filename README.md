@@ -8,6 +8,15 @@ A Python application to help manage and schedule appointments/meetings.
 2. Install dependencies: `pip install -r requirements.txt`
 3. Run the application: `streamlit main.py`
 
+### Google Calendar Credentials (`client_secrets.json`)
+
+Use a Google Service Account JSON (not an OAuth `installed` file):
+1. Enable Calendar API in a GCP project.
+2. Create a Service Account and JSON key → save as `client_secrets.json` (root, git‑ignored).
+3. Share your calendar with the `client_email` (permission: Make changes to events).
+4. Optional: set `CALENDAR_ID` (defaults to `primary`).
+
+
 ## Features
 - Collect user time needs to help find available spots in the calendar
 - Automatically add user info to the desired spot
